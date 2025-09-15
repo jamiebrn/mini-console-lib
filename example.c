@@ -172,7 +172,7 @@ int main(int argc, char* argv[])
         if (drawingShape)
         {
             char c = ' ';
-            uint8_t attrib = (selectedColour + 1) << 4;
+            uint8_t attrib = getSelectedColour(selectedColour + 1) << 4;
 
             // Delete if holding right mouse button
             if (Console_isRightMousePressed(&console))
