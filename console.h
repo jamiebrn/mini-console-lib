@@ -11,6 +11,8 @@
 #include <stdint.h>
 #include <math.h>
 
+typedef CHAR_INFO ConsolePixel;
+
 typedef struct ConsoleBuffer
 {
     int width;
@@ -20,6 +22,7 @@ typedef struct ConsoleBuffer
 } ConsoleBuffer;
 
 ConsoleBuffer ConsoleBuffer_create(int width, int height);
+ConsoleBuffer ConsoleBuffer_copy(const ConsoleBuffer* consoleBuffer);
 void ConsoleBuffer_destroy(ConsoleBuffer* consoleBuffer);
 
 void ConsoleBuffer_setChar(ConsoleBuffer* consoleBuffer, int x, int y, char c);
@@ -27,6 +30,8 @@ void ConsoleBuffer_setChar(ConsoleBuffer* consoleBuffer, int x, int y, char c);
 void ConsoleBuffer_setAttrib(ConsoleBuffer* consoleBuffer, int x, int y, DWORD attrib);
 void ConsoleBuffer_setForegroundAttrib(ConsoleBuffer* consoleBuffer, int x, int y, uint8_t flags);
 void ConsoleBuffer_setBackgroundAttrib(ConsoleBuffer* consoleBuffer, int x, int y, uint8_t flags);
+
+ConsolePixel ConsoleBuffer_getPixel(ConsoleBuffer* consoleBuffer, int x, int y);
 
 void ConsoleBuffer_drawText(ConsoleBuffer* consoleBuffer, const char* text, int x, int y, WORD attrib);
 void ConsoleBuffer_drawRect(ConsoleBuffer* consoleBuffer, int x, int y, int width, int height, char c, WORD attrib);
@@ -42,6 +47,8 @@ typedef struct Console
     DWORD _previousWriteMode;
     DWORD _previousReadMode;
     CONSOLE_CURSOR_INFO _previousCursorInfo;
+    SMALL_RECT _previousWindowSize;
+    COORD _previousBufferSize;
 
     ConsoleBuffer consoleBuffer;
 
@@ -58,7 +65,6 @@ typedef struct Console
 } Console;
 
 typedef INPUT_RECORD ConsoleEvent;
-typedef CHAR_INFO ConsolePixel;
 
 Console Console_create(int width, int height, const char* title);
 void Console_destroy(Console* console);

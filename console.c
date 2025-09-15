@@ -13,6 +13,19 @@ ConsoleBuffer ConsoleBuffer_create(int width, int height)
     return buffer;
 }
 
+ConsoleBuffer ConsoleBuffer_copy(const ConsoleBuffer* consoleBuffer)
+{
+    ConsoleBuffer copy;
+    copy.width = consoleBuffer->width;
+    copy.height = consoleBuffer->height;
+
+    int bufferSize = copy.width * copy.height * sizeof(CHAR_INFO);
+    copy._buffer = malloc(bufferSize);
+    memcpy(copy._buffer, consoleBuffer->_buffer, bufferSize);
+
+    return copy;
+}
+
 void ConsoleBuffer_destroy(ConsoleBuffer* consoleBuffer)
 {
     free(consoleBuffer->_buffer);
@@ -41,6 +54,11 @@ void ConsoleBuffer_setBackgroundAttrib(ConsoleBuffer* consoleBuffer, int x, int 
     bufferPtr->Attributes = ((flags & 0xF) << 4) | (bufferPtr->Attributes & 0xF);
 }
 
+ConsolePixel ConsoleBuffer_getPixel(ConsoleBuffer* consoleBuffer, int x, int y)
+{
+    return consoleBuffer->_buffer[y * consoleBuffer->width + x];
+}
+
 void ConsoleBuffer_drawText(ConsoleBuffer* consoleBuffer, const char* text, int x, int y, WORD attrib)
 {
     int i = 0;
@@ -63,11 +81,13 @@ void ConsoleBuffer_drawRect(ConsoleBuffer* consoleBuffer, int x, int y, int widt
     {
         x--;
         widthSign = -1;
+        width--;
     }
     if (height < 0)
     {
         y--;
         heightSign = -1;
+        height--;
     }
 
     for (int i = 0; abs(i) < abs(width); i += widthSign)
@@ -148,8 +168,19 @@ Console Console_create(int width, int height, const char* title)
 
     SetConsoleTitle(title);
 
+    CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
+    GetConsoleScreenBufferInfo(console._writeHandle, &consoleInfo);
+    console._previousWindowSize = consoleInfo.srWindow;
+    console._previousBufferSize = consoleInfo.dwSize;
+
+    SMALL_RECT tempWindow = {0, 0, 1, 1};
+    SetConsoleWindowInfo(console._writeHandle, TRUE, &tempWindow);
+
     COORD bufferSize = {width, height};
     SetConsoleScreenBufferSize(console._writeHandle, bufferSize);
+
+    SMALL_RECT windowSize = {0, 0, width - 1, height - 1};
+    SetConsoleWindowInfo(console._writeHandle, TRUE, &windowSize);
 
     Console_clearWindow(&console, 0);
 
@@ -167,6 +198,8 @@ void Console_destroy(Console* console)
         free(console->_eventBuffer);
     }
 
+    SetConsoleScreenBufferSize(console->_writeHandle, console->_previousBufferSize);
+    SetConsoleWindowInfo(console->_writeHandle, TRUE, &console->_previousWindowSize);
     SetConsoleMode(console->_writeHandle, console->_previousWriteMode);
     SetConsoleMode(console->_readHandle, console->_previousReadMode);
     SetConsoleCursorInfo(console->_writeHandle, &console->_previousCursorInfo);
