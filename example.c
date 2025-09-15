@@ -37,6 +37,14 @@ void drawingBuffers_shiftLeft(ConsoleBuffer* drawingBuffers)
     drawingBuffers[UNDO_HISTORY_MAX - 1] = ConsoleBuffer_copy(&drawingBuffers[UNDO_HISTORY_MAX - 2]);
 }
 
+uint8_t getSelectedColour(uint8_t selected_colour)
+{
+    uint8_t colour = 0;
+    colour |= ((selected_colour & 0x1) << 3);
+    colour |= ((selected_colour >> 1) & 0x7);
+    return colour;
+}
+
 int main(int argc, char* argv[])
 {
     const char* title = "Epic Console Drawing";
@@ -117,7 +125,7 @@ int main(int argc, char* argv[])
             else if (Console_isLeftMouseJustReleased(&console) || Console_isRightMouseJustReleased(&console))
             {
                 char c = ' ';
-                uint8_t attrib = (selectedColour + 1) << 4;
+                uint8_t attrib = getSelectedColour(selectedColour + 1) << 4;
 
                 // Delete if right mouse button
                 if (Console_isRightMouseJustReleased(&console))
@@ -143,11 +151,11 @@ int main(int argc, char* argv[])
 
         if (!drawingShape)
         {
-            if (Console_isLeftMousePressed(&console) && ConsoleBuffer_getPixel(drawingBuffer, mouseX, mouseY).Attributes != (selectedColour + 1) << 4)
+            if (Console_isLeftMousePressed(&console) && ConsoleBuffer_getPixel(drawingBuffer, mouseX, mouseY).Attributes != getSelectedColour(selectedColour + 1) << 4)
             {
                 drawingBuffers_shiftLeft(drawingBuffers);
                 ConsoleBuffer_setChar(drawingBuffer, mouseX, mouseY, 0);
-                ConsoleBuffer_setBackgroundAttrib(drawingBuffer, mouseX, mouseY, selectedColour + 1);
+                ConsoleBuffer_setBackgroundAttrib(drawingBuffer, mouseX, mouseY, getSelectedColour(selectedColour + 1));
             }
             else if (Console_isRightMousePressed(&console) && ConsoleBuffer_getPixel(drawingBuffer, mouseX, mouseY).Attributes != 0)
             {
@@ -208,10 +216,12 @@ int main(int argc, char* argv[])
 
         for (int i = 1; i < 16; i++)
         {
+            uint8_t colour = getSelectedColour(i);
+
             for (int j = 0; j < colourWidth; j++)
             {
                 ConsoleBuffer_setChar(&console.consoleBuffer, colourSelectionX + i * colourWidth + j, SCREEN_HEIGHT - 2, ' ');
-                ConsoleBuffer_setBackgroundAttrib(&console.consoleBuffer, colourSelectionX + i * colourWidth + j, SCREEN_HEIGHT - 2, i);
+                ConsoleBuffer_setBackgroundAttrib(&console.consoleBuffer, colourSelectionX + i * colourWidth + j, SCREEN_HEIGHT - 2, colour);
             }
             
             if ((selectedColour + 1) == i)
