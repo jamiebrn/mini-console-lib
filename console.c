@@ -6,7 +6,7 @@ ConsoleBuffer ConsoleBuffer_create(int width, int height)
     buffer.width = width;
     buffer.height = height;
 
-    int bufferMemSize = width * height * sizeof(CHAR_INFO);
+    int bufferMemSize = width * height * sizeof(*buffer._buffer);
     buffer._buffer = malloc(bufferMemSize);
     memset(buffer._buffer, 0, bufferMemSize);
 
@@ -19,7 +19,7 @@ ConsoleBuffer ConsoleBuffer_copy(const ConsoleBuffer* consoleBuffer)
     copy.width = consoleBuffer->width;
     copy.height = consoleBuffer->height;
 
-    int bufferSize = copy.width * copy.height * sizeof(CHAR_INFO);
+    int bufferSize = copy.width * copy.height * sizeof(*copy._buffer);
     copy._buffer = malloc(bufferSize);
     memcpy(copy._buffer, consoleBuffer->_buffer, bufferSize);
 
@@ -37,20 +37,20 @@ void ConsoleBuffer_setChar(ConsoleBuffer* consoleBuffer, int x, int y, char c)
     consoleBuffer->_buffer[x + y * consoleBuffer->width].Char.AsciiChar = c;
 }
 
-void ConsoleBuffer_setAttrib(ConsoleBuffer* consoleBuffer, int x, int y, DWORD attrib)
+void ConsoleBuffer_setAttrib(ConsoleBuffer* consoleBuffer, int x, int y, uint16_t attrib)
 {
     consoleBuffer->_buffer[x + y * consoleBuffer->width].Attributes = attrib;
 }
 
 void ConsoleBuffer_setForegroundAttrib(ConsoleBuffer* consoleBuffer, int x, int y, uint8_t flags)
 {
-    CHAR_INFO* bufferPtr = &consoleBuffer->_buffer[x + y * consoleBuffer->width];
+    ConsolePixel* bufferPtr = &consoleBuffer->_buffer[x + y * consoleBuffer->width];
     bufferPtr->Attributes = (flags & 0xF) | (bufferPtr->Attributes & 0xF0);
 }
 
 void ConsoleBuffer_setBackgroundAttrib(ConsoleBuffer* consoleBuffer, int x, int y, uint8_t flags)
 {
-    CHAR_INFO* bufferPtr = &consoleBuffer->_buffer[x + y * consoleBuffer->width];
+    ConsolePixel* bufferPtr = &consoleBuffer->_buffer[x + y * consoleBuffer->width];
     bufferPtr->Attributes = ((flags & 0xF) << 4) | (bufferPtr->Attributes & 0xF);
 }
 
@@ -59,7 +59,7 @@ ConsolePixel ConsoleBuffer_getPixel(ConsoleBuffer* consoleBuffer, int x, int y)
     return consoleBuffer->_buffer[y * consoleBuffer->width + x];
 }
 
-void ConsoleBuffer_drawText(ConsoleBuffer* consoleBuffer, const char* text, int x, int y, WORD attrib)
+void ConsoleBuffer_drawText(ConsoleBuffer* consoleBuffer, const char* text, int x, int y, uint16_t attrib)
 {
     int i = 0;
     while (1)
@@ -72,7 +72,7 @@ void ConsoleBuffer_drawText(ConsoleBuffer* consoleBuffer, const char* text, int 
     }
 }
 
-void ConsoleBuffer_drawRect(ConsoleBuffer* consoleBuffer, int x, int y, int width, int height, char c, WORD attrib)
+void ConsoleBuffer_drawRect(ConsoleBuffer* consoleBuffer, int x, int y, int width, int height, char c, uint16_t attrib)
 {
     int widthSign = 1;
     int heightSign = 1;
@@ -100,7 +100,7 @@ void ConsoleBuffer_drawRect(ConsoleBuffer* consoleBuffer, int x, int y, int widt
     }
 }
 
-void ConsoleBuffer_drawLine(ConsoleBuffer* consoleBuffer, int x1, int y1, int x2, int y2, char c, WORD attrib)
+void ConsoleBuffer_drawLine(ConsoleBuffer* consoleBuffer, int x1, int y1, int x2, int y2, char c, uint16_t attrib)
 {
     if (x2 - x1 == 0)
     {
@@ -116,7 +116,7 @@ void ConsoleBuffer_drawLine(ConsoleBuffer* consoleBuffer, int x1, int y1, int x2
 
     float grad = (float)(y2 - y1) / (float)(x2 - x1);
     int xSign = (x2 - x1) >= 0 ? 1 : -1;
-    float xStep = (float)xSign / (float)max(abs(y2 - y1), abs(x2 - x1));
+    float xStep = (float)xSign / (float)MAX(abs(y2 - y1), abs(x2 - x1));
     for (float i = 0; abs(i) < abs(x2 - x1); i += xStep)
     {
         float x = x1 + i;
@@ -126,23 +126,23 @@ void ConsoleBuffer_drawLine(ConsoleBuffer* consoleBuffer, int x1, int y1, int x2
     }
 }
 
-void ConsoleBuffer_clear(ConsoleBuffer* consoleBuffer, char c, DWORD attrib)
+void ConsoleBuffer_clear(ConsoleBuffer* consoleBuffer, char c, uint16_t attrib)
 {
     int bufferSize = consoleBuffer->width * consoleBuffer->height;
 
     if (c == 0 && attrib == 0)
     {
-        memset(consoleBuffer->_buffer, 0, bufferSize * sizeof(CHAR_INFO));
+        memset(consoleBuffer->_buffer, 0, bufferSize * sizeof(*consoleBuffer->_buffer));
         return;
     }
 
-    CHAR_INFO charInfo;
-    charInfo.Char.AsciiChar = c;
-    charInfo.Attributes = attrib;
+    ConsolePixel pixel;
+    pixel.Char.AsciiChar = c;
+    pixel.Attributes = attrib;
 
     for (int i = 0; i < bufferSize; i++)
     {
-        consoleBuffer->_buffer[i] = charInfo;
+        consoleBuffer->_buffer[i] = pixel;
     }
 }
 
@@ -153,6 +153,7 @@ Console Console_create(int width, int height, const char* title)
 
     console.consoleBuffer = ConsoleBuffer_create(width, height);
 
+    #ifdef _WIN32
     console._writeHandle = GetStdHandle(STD_OUTPUT_HANDLE);
     console._readHandle = GetStdHandle(STD_INPUT_HANDLE);
 
@@ -181,6 +182,12 @@ Console Console_create(int width, int height, const char* title)
 
     SMALL_RECT windowSize = {0, 0, width - 1, height - 1};
     SetConsoleWindowInfo(console._writeHandle, TRUE, &windowSize);
+    #else
+
+    #endif
+
+    // Hide cursor
+    printf("\033[?25l");
 
     Console_clearWindow(&console, 0);
 
@@ -198,29 +205,47 @@ void Console_destroy(Console* console)
         free(console->_eventBuffer);
     }
 
+    #ifdef _WIN32
     SetConsoleScreenBufferSize(console->_writeHandle, console->_previousBufferSize);
     SetConsoleWindowInfo(console->_writeHandle, TRUE, &console->_previousWindowSize);
     SetConsoleMode(console->_writeHandle, console->_previousWriteMode);
     SetConsoleMode(console->_readHandle, console->_previousReadMode);
     SetConsoleCursorInfo(console->_writeHandle, &console->_previousCursorInfo);
+    #else
+
+    // Show cursor
+    printf("\033[?25h");
+
+    #endif
 }
 
 void Console_refreshEvents(Console* console)
 {
-    DWORD numEvents;
+    uint16_t numEvents;
+
+    #ifdef _WIN32
     GetNumberOfConsoleInputEvents(console->_readHandle, &numEvents);
+    #else
+
+    #endif
+    
     if (numEvents > 0)
     {
         if (console->_eventBuffer)
         {
-            console->_eventBuffer = realloc(console->_eventBuffer, numEvents * sizeof(INPUT_RECORD));
+            console->_eventBuffer = realloc(console->_eventBuffer, numEvents * sizeof(*console->_eventBuffer));
         }
         else
         {
-            console->_eventBuffer = malloc(numEvents * sizeof(INPUT_RECORD));
+            console->_eventBuffer = malloc(numEvents * sizeof(*console->_eventBuffer));
         }
 
+        #ifdef _WIN32
         ReadConsoleInput(console->_readHandle, console->_eventBuffer, numEvents, &console->_numEvents);
+        #else
+
+        #endif
+        
         console->_eventIter = 0;
     }
 
@@ -245,8 +270,8 @@ int Console_pollEvent(Console* console, ConsoleEvent* consoleEvent)
 
     if (consoleEvent->EventType == MOUSE_EVENT)
     {
-        console->_mousePos.X = min(consoleEvent->Event.MouseEvent.dwMousePosition.X, console->consoleBuffer.width - 1);
-        console->_mousePos.Y = min(consoleEvent->Event.MouseEvent.dwMousePosition.Y, console->consoleBuffer.height - 1);
+        console->_mousePos.X = MIN(consoleEvent->Event.MouseEvent.dwMousePosition.X, console->consoleBuffer.width - 1);
+        console->_mousePos.Y = MIN(consoleEvent->Event.MouseEvent.dwMousePosition.Y, console->consoleBuffer.height - 1);
         console->_leftMousePressed = consoleEvent->Event.MouseEvent.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED;
         console->_rightMousePressed = consoleEvent->Event.MouseEvent.dwButtonState & RIGHTMOST_BUTTON_PRESSED;
     }
@@ -299,8 +324,9 @@ char Console_isKeyPressed(const Console* console, uint8_t key)
     return console->_keysPressed[key];
 }
 
-void Console_clearWindow(Console* console, WORD attrib)
+void Console_clearWindow(Console* console, uint16_t attrib)
 {
+    #ifdef _WIN32
     CONSOLE_SCREEN_BUFFER_INFO bufferInfo;
     DWORD cellCount;
     DWORD written;
@@ -311,13 +337,77 @@ void Console_clearWindow(Console* console, WORD attrib)
     FillConsoleOutputCharacter(console->_writeHandle, ' ', cellCount, home, &written);
     FillConsoleOutputAttribute(console->_writeHandle, attrib, cellCount, home, &written);
     SetConsoleCursorPosition(console->_writeHandle, home);
+    #else
+    // printf("\033[2J\033[H");
+    printf("\033[H");
+    // system("clear");
+    #endif
 }
 
 void Console_display(Console* console)
 {
+    #ifdef _WIN32
     COORD charBufSize = {console->consoleBuffer.width, console->consoleBuffer.height};
     COORD characterPos = {0, 0};
     SMALL_RECT writeArea = {0, 0, console->consoleBuffer.width - 1, console->consoleBuffer.height - 1}; 
 
     WriteConsoleOutputA(console->_writeHandle, console->consoleBuffer._buffer, charBufSize, characterPos, &writeArea);
+    #else
+    Console_clearWindow(console, 0);
+
+    for (int y = 0; y < console->consoleBuffer.height; y++)
+    {
+        for (int x = 0; x < console->consoleBuffer.width; x++)
+        {
+            ConsolePixel pixel = ConsoleBuffer_getPixel(&console->consoleBuffer, x, y);
+
+            uint8_t foregroundR, foregroundG, foregroundB;
+            uint8_t backgroundR, backgroundG, backgroundB;
+
+            _linux_getWinColour(pixel.Attributes, &foregroundR, &foregroundG, &foregroundB);
+            _linux_getWinColour(pixel.Attributes >> 4, &backgroundR, &backgroundG, &backgroundB);
+
+            if (pixel.Char.AsciiChar == 0) pixel.Char.AsciiChar = ' ';
+
+            printf("\033[38;2;<%u>;<%u>;<%u>m\033[48;2;%u;%u;%um%c",
+                foregroundR, foregroundG, foregroundB,
+                backgroundR, backgroundG, backgroundB,
+                pixel.Char.AsciiChar
+            );
+        }
+
+        printf("\n");
+    }
+
+    #endif
 }
+
+#ifndef _WIN32
+// Convert 4 bit flag colour to RGB windows console API colour
+void _linux_getWinColour(uint8_t flag, uint8_t* r, uint8_t* g, uint8_t* b)
+{
+    *r = 0;
+    *g = 0;
+    *b = 0;
+
+    if (flag == 0x7) // white special case
+    {
+        *r = 192;
+        *g = 192;
+        *b = 192;
+        return;
+    }
+    
+    if (flag & 0x4) *r = 128;
+    if (flag & 0x2) *g = 128;
+    if (flag & 0x1) *b = 128;
+
+    
+    if (flag & 0x8) // bright
+    {
+        *r = MIN(*r + *r, 255);
+        *g = MIN(*g + *g, 255);
+        *b = MIN(*b + *b, 255);
+    }
+}
+#endif

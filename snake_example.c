@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <time.h>
+#include <string.h>
 
 #include "console.h"
 
@@ -167,7 +168,7 @@ int main()
 
         ConsoleBuffer_drawText(&console.consoleBuffer, "SCORE:", 0, 0, 15);
         char scoreStr[20];
-        itoa(snakeLen - SNAKE_LENGTH_INIT, scoreStr, 10);
+        // itoa(snakeLen - SNAKE_LENGTH_INIT, scoreStr, 10);
         ConsoleBuffer_drawText(&console.consoleBuffer, scoreStr, 8, 0, 15);
         
         if (gameOver)
